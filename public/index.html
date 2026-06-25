@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Webhook Playground</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f1115; color: #e7e9ee; }
+    header { padding: 1rem 1.5rem; border-bottom: 1px solid #242833; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    h1 { font-size: 1.15rem; margin: 0; }
+    .hint { color: #8b90a0; font-size: .82rem; }
+    code { background: #1d2129; padding: .1rem .35rem; border-radius: 5px; color: #93c5fd; }
+    .layout { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 64px); }
+    .list { border-right: 1px solid #242833; overflow-y: auto; max-height: calc(100vh - 64px); }
+    .item { padding: .7rem 1rem; border-bottom: 1px solid #1c2027; cursor: pointer; }
+    .item:hover { background: #161a21; }
+    .item.active { background: #1b2433; }
+    .item .m { font-weight: 700; color: #93c5fd; }
+    .item .t { color: #8b90a0; font-size: .75rem; }
+    .detail { padding: 1.25rem 1.5rem; overflow-y: auto; }
+    pre { background: #12151b; border: 1px solid #242833; border-radius: 10px; padding: 1rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+    h3 { margin: 1.2rem 0 .4rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #8b90a0; }
+    button { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: .45rem .8rem; font: inherit; cursor: pointer; }
+    button.ghost { background: #242833; }
+    input { background: #12151b; border: 1px solid #2a2f3a; color: #e7e9ee; border-radius: 8px; padding: .45rem .6rem; font: inherit; width: 320px; max-width: 60%; }
+    .empty { color: #8b90a0; padding: 3rem 1.5rem; text-align: center; }
+    .replay { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-top: .5rem; }
+    .ok { color: #34d399; } .err { color: #f87171; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>🪝 Webhook Playground</h1>
+      <div class="hint">Send any webhook to <code id="hookurl">/hook</code> — POST, headers, JSON all captured.</div>
+    </div>
+    <div>
+      <button class="ghost" id="clear">Clear</button>
+      <label class="hint"><input type="checkbox" id="auto" checked style="width:auto" /> auto-refresh</label>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="list" id="list"></div>
+    <div class="detail" id="detail"><div class="empty">No webhooks yet. Send one to the URL above.</div></div>
+  </div>
+
+  <script>
+    const listEl = document.getElementById('list');
+    const detailEl = document.getElementById('detail');
+    const auto = document.getElementById('auto');
+    document.getElementById('hookurl').textContent = location.origin + '/hook';
+    let events = [];
+    let selected = null;
+
+    function fmtTime(iso) { return new Date(iso).toLocaleTimeString(); }
+
+    function renderList() {
+      if (!events.length) { listEl.innerHTML = ''; return; }
+      listEl.innerHTML = events.map(e => `
+        <div class="item ${e.id === selected ? 'active' : ''}" data-id="${e.id}">
+          <div><span class="m">${e.method}</span> ${e.path}</div>
+          <div class="t">${fmtTime(e.receivedAt)} · ${e.size} bytes</div>
+        </div>`).join('');
+      [...listEl.querySelectorAll('.item')].forEach(el =>
+        el.addEventListener('click', () => { selected = +el.dataset.id; renderList(); renderDetail(); }));
+    }
+
+    function renderDetail() {
+      const e = events.find(x => x.id === selected);
+      if (!e) { detailEl.innerHTML = '<div class="empty">Select a webhook.</div>'; return; }
+      const body = e.json ? JSON.stringify(e.json, null, 2) : (e.body || '(empty)');
+      detailEl.innerHTML = `
+        <div class="replay">
+          <input id="target" placeholder="Replay to URL (e.g. http://localhost:5000/webhook)" />
+          <button id="replayBtn">Replay #${e.id}</button>
+          <span id="replayMsg" class="hint"></span>
+        </div>
+        <h3>Headers</h3><pre>${escape(JSON.stringify(e.headers, null, 2))}</pre>
+        <h3>Body${e.json ? ' (JSON)' : ''}</h3><pre>${escape(body)}</pre>`;
+      document.getElementById('replayBtn').addEventListener('click', replay);
+    }
+
+    function escape(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+    async function replay() {
+      const target = document.getElementById('target').value.trim();
+      const msg = document.getElementById('replayMsg');
+      if (!target) { msg.textContent = 'Enter a target URL.'; return; }
+      msg.textContent = 'Replaying…';
+      try {
+        const res = await fetch('/_replay', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id: selected, target }) });
+        const data = await res.json();
+        msg.innerHTML = data.error ? `<span class="err">${data.error}</span>`
+          : `<span class="ok">→ HTTP ${data.status}</span>`;
+      } catch (e) { msg.innerHTML = `<span class="err">${e.message}</span>`; }
+    }
+
+    async function load() {
+      const res = await fetch('/_events');
+      events = (await res.json()).events;
+      if (selected === null && events.length) selected = events[0].id;
+      renderList(); renderDetail();
+    }
+
+    document.getElementById('clear').addEventListener('click', async () => {
+      await fetch('/_clear', { method: 'POST' }); selected = null; load();
+    });
+    setInterval(() => auto.checked && load(), 3000);
+    load();
+  </script>
+</body>
+</html>

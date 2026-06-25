@@ -1,0 +1,26 @@
+{
+  "name": "webhook-playground",
+  "version": "1.0.0",
+  "description": "A zero-dependency webhook receiver: capture incoming webhooks, inspect headers + body in a live UI, and replay them to any target URL.",
+  "type": "module",
+  "bin": {
+    "webhook-playground": "src/server.js"
+  },
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "keywords": [
+    "sales-engineering",
+    "presales",
+    "webhooks",
+    "stripe",
+    "github",
+    "twilio",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}
