@@ -4,6 +4,8 @@ A **zero-dependency** webhook receiver. Point any webhook source (Stripe, GitHub
 
 Pure Node.js (built-in `http` + `fetch`). No frameworks, no `npm install`.
 
+![Webhook Playground — captured requests listed on the left, with the selected webhook's headers and pretty-printed JSON body and a Replay button on the right](docs/screenshot.png)
+
 > Why this exists: webhooks are in almost every SE demo and integration call ("when X happens in our system, we POST to your endpoint…"). Being able to *show* the exact payload arriving — and replay it on demand — is a small superpower in a technical sale. The zero-dependency build also signals clean Node fundamentals.
 
 ---
